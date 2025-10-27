@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Smart Light Dashboard</title>
+  <style>
+    :root{
+      --bg:#f2f3f5;--card:#ffffff;--ink:#0f172a;--muted:#64748b;--brand:#0ea5e9;--accent:#ef4444;--ok:#16a34a;
+      --code-bg:#0d0f14;--code-ink:#a7f3d0;--border:#e5e7eb;--shadow:0 6px 18px rgba(2,8,23,.08);
+      --skeleton:#e2e8f0;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans","Apple Color Emoji","Segoe UI Emoji"}
+    h1{font-size:28px;margin:0;display:flex;align-items:center;gap:.6rem;font-weight:800}
+    .wrap{max-width:1200px;margin:28px auto;padding:0 18px}
+    header{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px}
+    .lora{display:flex;align-items:center;gap:.35rem;font-weight:700;opacity:.7}
+    .grid{display:grid;grid-template-columns:360px 1fr 1fr;gap:18px}
+    .card{background:var(--card);border:1px solid var(--border);border-radius:14px;box-shadow:var(--shadow)}
+    .card .hd{padding:18px 18px 10px;border-bottom:1px solid var(--border)}
+    .card .hd h2{margin:0 0 4px;font-size:20px}
+    .sub{font-size:12px;color:var(--accent);font-weight:800;letter-spacing:.2px}
+    .body{padding:18px}
+
+    .ctrl label{display:block;font-weight:700;margin:.4rem 0 .25rem}
+    .ctrl input[type=text], .ctrl input[type=number]{width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:10px;font-size:14px}
+    .ctrl .row{display:grid;grid-template-columns:1fr 140px;align-items:center;gap:12px}
+    .ctrl .send{margin-top:14px;padding:12px 18px;border:0;border-radius:12px;background:var(--brand);color:#fff;font-weight:800;cursor:pointer}
+    .ctrl .send:active{transform:translateY(1px)}
+    .muted{color:var(--muted)}
+
+    .state-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}
+    .state{padding:14px;border:1px solid var(--border);border-radius:12px}
+    .state h4{margin:0 0 8px;font-size:15px}
+
+    .code{background:var(--code-bg);color:var(--code-ink);font:13px/1.5 ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace;border-radius:12px;padding:14px;overflow:auto;min-height:280px;white-space:pre}
+    .meta{margin-top:8px;font-size:12px;color:var(--muted);display:flex;justify-content:space-between}
+
+    .toast{position:fixed;right:16px;top:16px;background:#111827;color:#fff;padding:10px 14px;border-radius:10px;box-shadow:var(--shadow);opacity:0;transform:translateY(-8px);transition:.25s}
+    .toast.show{opacity:1;transform:none}
+
+    .skeleton{background:var(--skeleton);border-radius:6px;min-height:14px;margin:6px 0;}
+    @media (max-width:1100px){.grid{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>💡 Smart Light Dashboard</h1>
+      <div class="lora">
+        <img src="/static/lora_logo.png" alt="LoRa" style="height:26px;opacity:.8;">
+      </div>
+    </header>
+
+    <div class="grid">
+      <section class="card ctrl" id="panel-control">
+        <div class="hd"><h2>Controls</h2><div class="sub">Gateway</div></div>
+        <div class="body">
+          <label for="gateway_mac">Gateway MAC</label>
+          <input id="gateway_mac" type="text" value="98:A3:16:E7:23:5C" readonly />
+          <div id="inputs-holder" style="margin-top:10px"><div class="muted">Device inputs will appear after first report.</div></div>
+          <button class="send" id="btn-send">Send Command</button>
+          <div class="muted" style="margin-top:6px">Brightness range: 0–100</div>
+        </div>
+      </section>
+
+      <section class="card" id="panel-post">
+        <div class="hd"><h2>Gateway &gt; Server</h2><div class="sub">POST /devices/report</div></div>
+        <div class="body">
+          <div class="code" id="code-post">
+            <div class="skeleton" style="width:90%"></div>
+            <div class="skeleton" style="width:80%"></div>
+            <div class="skeleton" style="width:95%"></div>
+          </div>
+          <div class="meta"><span id="post-updated">Last updated: —</span><span id="post-status"></span></div>
+        </div>
+      </section>
+
+      <section class="card" id="panel-get">
+        <div class="hd"><h2>Server &gt; Gateway</h2><div class="sub">GET /devices/{mac}/next-command</div></div>
+        <div class="body">
+          <div class="code" id="code-get">
+            <div class="skeleton" style="width:85%"></div>
+            <div class="skeleton" style="width:75%"></div>
+          </div>
+          <div class="meta"><span id="get-updated">Last updated: —</span><span id="get-status"></span></div>
+        </div>
+      </section>
+
+      <section class="card" style="grid-column:1 / 2" id="panel-states">
+        <div class="hd"><h2>Node States</h2><div class="sub">from last POST</div></div>
+        <div class="body">
+          <div class="state-grid" id="state-grid">
+            <div class="skeleton" style="height:80px"></div>
+            <div class="skeleton" style="height:80px"></div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    const $ = sel => document.querySelector(sel);
+    const fmtTime = d => d.toLocaleTimeString([], {hour12:false});
+    const pretty = obj => JSON.stringify(obj, null, 2);
+    const showToast = msg => { const t=$('#toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2200); };
+    function clampInt(v,min=0,max=100){v=parseInt(v,10);if(isNaN(v))v=min;return Math.max(min,Math.min(max,v));}
+    let deviceList=[];
+
+    function renderInputsFromDevices(list){
+      const holder=document.getElementById('inputs-holder');
+      if(!Array.isArray(list)||list.length===0){
+        holder.innerHTML='<div class="muted">Device inputs will appear after first report.</div>';
+        return;
+      }
+      list.sort((a,b)=>(a.deviceId||'').localeCompare(b.deviceId||''));
+      deviceList=list.map(d=>({deviceId:d.deviceId}));
+      holder.innerHTML=list.map(d=>{
+        const id=d.deviceId;
+        const current=typeof d.brightness==='number'?d.brightness:'';
+        return `<div class="row" data-device="${id}"><label>${id} Brightness:</label><input type="number" min="0" max="100" step="1" inputmode="numeric" value="${current}" /></div>`;
+      }).join('');
+      holder.querySelectorAll('input[type=number]').forEach(inp=>{
+        inp.addEventListener('input',()=>inp.value=clampInt(inp.value));
+        inp.addEventListener('blur',()=>inp.value=clampInt(inp.value));
+      });
+    }
+
+    function renderStates(list){
+      const grid=document.getElementById('state-grid');
+      if(!Array.isArray(list)||list.length===0){
+        grid.innerHTML='<div class="skeleton" style="height:80px"></div><div class="skeleton" style="height:80px"></div>';
+        return;
+      }
+      list.sort((a,b)=>(a.deviceId||'').localeCompare(b.deviceId||''));
+      grid.innerHTML=list.map(d=>{
+        const b=(d.brightness??0)+'%';
+        const lux=(d.lux??'—');
+        const cur=(d.current??'—');
+        return `<div class="state"><h4>${d.deviceId} State</h4><div>Brightness: <strong>${b}</strong></div><div>Lux: <strong>${lux}</strong></div><div>Current: <strong>${cur} A</strong></div></div>`;
+      }).join('');
+    }
+
+    async function updatePostPanel(){
+      try{
+        const res=await fetch('/test/status');
+        if(!res.ok)throw new Error('HTTP '+res.status);
+        const json=await res.json();
+        let report=json.last_report||null;
+        if(!report&&json.node_status){
+          const devices=Object.entries(json.node_status).map(([deviceId,st])=>({
+            deviceId,brightness:st.brightness??0,lux:st.lux??undefined,current:st.current??undefined,
+          }));
+          report={gw_id:(json.gateway_id||'GW_01'),devices};
+        }
+        if(report){
+          $('#code-post').textContent=pretty(report);
+          $('#post-status').textContent='OK';
+          $('#post-status').style.color='var(--ok)';
+          $('#post-updated').textContent='Last updated: '+fmtTime(new Date());
+          // chỉ render input nếu danh sách device thay đổi
+          const newList=(report.devices||[]).map(d=>d.deviceId);
+          const oldList=deviceList.map(d=>d.deviceId);
+          if(JSON.stringify(newList)!==JSON.stringify(oldList)){
+            renderInputsFromDevices(report.devices||[]);
+          }
+          renderStates(report.devices||[]);
+        }else{
+          $('#code-post').innerHTML='<div class="skeleton" style="width:90%"></div><div class="skeleton" style="width:80%"></div>';
+          $('#post-status').textContent='';
+        }
+      }catch(err){
+        $('#code-post').textContent='Error fetching /test/status';
+        $('#post-status').textContent='Error';
+      }
+    }
+
+    async function onSend(){
+      const holder=$('#inputs-holder');
+      const rows=holder.querySelectorAll('.row');
+      const devices=Array.from(rows).map(row=>{
+        const id=row.getAttribute('data-device');
+        const val=clampInt(row.querySelector('input').value);
+        return{deviceId:id,brightness:val};
+      });
+      if(devices.length===0){showToast('No devices to command');return;}
+      const payload={ok:true,devices};
+      let posted=false;let msg='Queued OK ✅';
+      try{
+        const res=await fetch('/test/send-command',{
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({gateway_mac:$('#gateway_mac').value.trim(),commands:devices})
+        });
+        posted=res.ok;
+        if(!posted){msg='Preview only (server not ready) ⚠️';}
+      }catch{msg='Preview only (server not ready) ⚠️';}
+      // hiển thị gói tin vừa gửi
+      $('#code-get').textContent=pretty(payload)+(posted?'':'\n// preview');
+      $('#get-updated').textContent='Last updated: '+fmtTime(new Date());
+      $('#get-status').textContent=posted?'Queued':'Preview';
+      $('#get-status').style.color=posted?'var(--ok)':'var(--muted)';
+      showToast(msg);
+    }
+
+    $('#btn-send').addEventListener('click',onSend);
+    // chỉ giữ auto refresh cho POST panel
+    updatePostPanel();
+    setInterval(updatePostPanel,4500);
+  </script>
+</body>
+</html>
