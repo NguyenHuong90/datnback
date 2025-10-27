@@ -3,30 +3,29 @@ DATN Smart Light Control System - Mock API Server
 ==================================================
 
 FastAPI server để giao tiếp với Gateway ESP32
-Hỗ trợ 5 endpoints chính:
+Hỗ trợ 3 endpoints chính:
 1. POST /devices/register - Đăng ký gateway
 2. POST /devices/report - Nhận dữ liệu từ nodes
 3. GET /devices/{mac}/next-command - Gửi lệnh điều khiển
-4. GET /schedules - Lấy danh sách lịch
-5. POST /schedules - Lưu lịch mới
 
-Version: 3.2 (CORS + SCHEDULER ENABLED)
+Version: 3.1 (CORS ENABLED)
 """
 
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.cors import CORSMiddleware  # THÊM DÒNG NÀY
 from typing import Dict, List
 import time
 
 app = FastAPI(title="DATN Smart Light Mock API")
 
-# BẬT CORS
+# BẬT CORS CHO PHÉP LOCALHOST (và mọi nơi)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"],  # Dev: cho phép tất cả
+    # allow_origins=["http://127.0.0.1:5500", "http://localhost:5500"],  # Production: chỉ local
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -43,7 +42,6 @@ app.mount("/static", StaticFiles(directory="templates/static"), name="static")
 registered_gateways: Dict[str, dict] = {}
 node_status: Dict[str, dict] = {}
 command_queue: Dict[str, List[dict]] = {}
-schedules_db: List[dict] = []  # ← MỚI: Lưu lịch
 
 
 # ============================================================
@@ -129,22 +127,6 @@ async def get_command(device_mac: str):
 
 
 # ============================================================
-# 4. SCHEDULE ENDPOINTS (MỚI)
-# ============================================================
-@app.get("/schedules")
-async def get_schedules():
-    print(f"GET /schedules → {len(schedules_db)} lịch")
-    return schedules_db
-
-@app.post("/schedules")
-async def save_schedules(schedules: List[dict]):
-    global schedules_db
-    schedules_db = schedules
-    print(f"POST /schedules → Đã lưu {len(schedules_db)} lịch")
-    return {"ok": True, "count": len(schedules_db)}
-
-
-# ============================================================
 # TEST ENDPOINTS
 # ============================================================
 @app.post("/test/send-command")
@@ -158,10 +140,10 @@ async def test_send_command(request: Request):
     
     command_queue[gateway_mac].extend(commands)
     
-    print("\n" + f"TEST COMMAND ADDED for {gateway_mac}:")
+    print("\n" + "TEST COMMAND ADDED for {gateway_mac}:")
     for cmd in commands:
         print(f"  {cmd['deviceId']}: {cmd['brightness']}%")
-    print("TEST COMMAND ADDED\n")
+    print("TEST COMMAND ADDED" + "\n")
     
     return {"ok": True, "message": f"Added {len(commands)} command(s)"}
 
@@ -172,8 +154,7 @@ async def test_status():
         "ok": True,
         "registered_gateways": list(registered_gateways.keys()),
         "node_status": node_status,
-        "command_queues": {k: len(v) for k, v in command_queue.items()},
-        "schedules_count": len(schedules_db)  # ← Thêm thông tin lịch
+        "command_queues": {k: len(v) for k, v in command_queue.items()}
     }
 
 
@@ -191,14 +172,12 @@ async def dashboard(request: Request):
 @app.on_event("startup")
 async def startup_event():
     print("\n" + "=" * 60)
-    print("DATN Smart Light Mock API Server - CORS + SCHEDULER ENABLED")
+    print("DATN Smart Light Mock API Server - CORS ENABLED")
     print("=" * 60)
     print("Endpoints:")
     print("   POST   /devices/register")
     print("   POST   /devices/report")
     print("   GET    /devices/{mac}/next-command")
-    print("   GET    /schedules")
-    print("   POST   /schedules")
     print("\nTest:")
     print("   POST   /test/send-command")
     print("   GET    /test/status")
